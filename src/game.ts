@@ -49,14 +49,25 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
     app,
   };
 
-  const {sprite, rigidBody} = await createFruit(fruits[0], context);
+  const objects = await Promise.all(
+    fruits.map((fruit) => createFruit(fruit, context)),
+  );
+
+  let i = 0;
+  for(const object of objects){
+    object.rigidBody.setTranslation({x: i+300, y: 200}, true);
+    i += object.sprite.width;
+  };
 
   app.ticker.add((delta) => {
     world.step();
-    const position = rigidBody.translation();
-    sprite.x = position.x;
-    sprite.y = position.y;
-    sprite.rotation = rigidBody.rotation();
+
+    for (const { sprite, rigidBody } of objects) {
+      const position = rigidBody.translation();
+      sprite.x = position.x;
+      sprite.y = position.y;
+      sprite.rotation = rigidBody.rotation();
+    }
     debugRender.debug(world.debugRender());
   });
 });

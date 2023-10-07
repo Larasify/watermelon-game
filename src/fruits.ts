@@ -36,7 +36,7 @@ export const fruits = [
   {
     name: "Yuzu",
     img: "yuzu.png",
-    origin: [0.5, 319 / 416],
+    origin: [0.5, 219/416],
   },
   {
     name: "Peach",
@@ -45,7 +45,7 @@ export const fruits = [
   },
   {
     name: "Pinapple",
-    img: "pinapple.png",
+    img: "pineapple.png",
     origin: [0.5, 348 / 616],
   },
   {
@@ -59,6 +59,7 @@ export const fruits = [
     origin: [0.5, 0.5],
   },
 ];
+const SCALE = 0.2;
 
 export async function createFruit(
   def: (typeof fruits)[number],
@@ -67,6 +68,7 @@ export async function createFruit(
   const texture = BaseTexture.from(def.img);
 
   const sprite = Sprite.from(texture);
+  sprite.scale.set(SCALE);
   sprite.anchor.set(def.origin[0], def.origin[1]);
   return new Promise<{
     sprite: Sprite;
@@ -77,7 +79,7 @@ export async function createFruit(
         context.RAPIER.RigidBodyDesc.dynamic().setTranslation(0.0, 0.0);
       const rigidBody = context.world.createRigidBody(rigidBodyDesc);
 
-      const colliderDesc = context.RAPIER.ColliderDesc.ball(texture.width / 2);
+      const colliderDesc = context.RAPIER.ColliderDesc.ball(texture.width / 2 * SCALE);
       const collider = context.world
         .createCollider(colliderDesc, rigidBody)
         .setTranslation({
