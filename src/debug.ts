@@ -4,7 +4,7 @@ import { Graphics } from "pixi.js";
 export class DebugRender extends Graphics {
     constructor(){
         super();
-        this.lineStyle(2, 0x000000, 1);
+        this.zIndex = 100;
     }
     debug(buffer:DebugRenderBuffers){
         this.clear();

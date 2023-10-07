@@ -1,6 +1,7 @@
 import type { DebugRenderBuffers } from "@dimforge/rapier2d";
 import { Application, Graphics, Sprite } from "pixi.js";
 import { DebugRender } from "./debug";
+import { createFruit, fruits } from "./fruits";
 
 const app = new Application({
   background: "#1099bb",
@@ -9,10 +10,7 @@ const app = new Application({
 });
 
 app.stage.scale.set(2);
-
-const cherry = Sprite.from("cherry.png");
-cherry.anchor.set(0.5, 0.65);
-app.stage.addChild(cherry);
+app.stage.sortableChildren = true;
 
 const debugRender = new DebugRender();
 app.stage.addChild(debugRender);
@@ -36,22 +34,29 @@ function createWorld(RAPIER: typeof import("@dimforge/rapier2d")) {
   return world;
 }
 
-import("@dimforge/rapier2d").then((RAPIER) => {
+export type Context = {
+  RAPIER: typeof import("@dimforge/rapier2d");
+  world: import("@dimforge/rapier2d").World;
+  app: Application;
+};
+
+import("@dimforge/rapier2d").then(async (RAPIER) => {
   const world = createWorld(RAPIER);
-  const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(0.0, 0.0);
-  const rigidBody = world.createRigidBody(rigidBodyDesc);
 
-  const colliderDesc = RAPIER.ColliderDesc.ball(20);
-  const collider = world.createCollider(colliderDesc, rigidBody);
+  const context = {
+    RAPIER,
+    world,
+    app,
+  };
 
-  rigidBody.addForce(new RAPIER.Vector2(2, 0.0), true);
+  const {sprite, rigidBody} = await createFruit(fruits[0], context);
 
   app.ticker.add((delta) => {
     world.step();
     const position = rigidBody.translation();
-    cherry.x = position.x;
-    cherry.y = position.y;
-    cherry.rotation = rigidBody.rotation();
+    sprite.x = position.x;
+    sprite.y = position.y;
+    sprite.rotation = rigidBody.rotation();
     debugRender.debug(world.debugRender());
   });
 });

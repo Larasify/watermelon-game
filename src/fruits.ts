@@ -1,0 +1,94 @@
+import type { RigidBody, World } from "@dimforge/rapier2d";
+import { BaseTexture, Sprite } from "pixi.js";
+import type { Context } from "./game";
+
+export const fruits = [
+  {
+    name: "Cherry",
+    img: "cherry.png",
+    origin: [0.5, 88 / 136],
+  },
+  {
+    name: "Strawberry",
+    img: "strawberry.png",
+    origin: [0.5, 75 / 148],
+  },
+  {
+    name: "Grape",
+    img: "grape.png",
+    origin: [0.5, 0.5],
+  },
+  {
+    name: "Orange",
+    img: "orange.png",
+    origin: [0.5, 122 / 226],
+  },
+  {
+    name: "Persimmon",
+    img: "persimmon.png",
+    origin: [0.5, 150.5 / 283],
+  },
+  {
+    name: "Apple",
+    img: "apple.png",
+    origin: [0.5, 187 / 351],
+  },
+  {
+    name: "Yuzu",
+    img: "yuzu.png",
+    origin: [0.5, 319 / 416],
+  },
+  {
+    name: "Peach",
+    img: "peach.png",
+    origin: [0.5, 0.5],
+  },
+  {
+    name: "Pinapple",
+    img: "pinapple.png",
+    origin: [0.5, 348 / 616],
+  },
+  {
+    name: "Honeydew",
+    img: "honeydew.png",
+    origin: [0.5, 0.5],
+  },
+  {
+    name: "Watermelon",
+    img: "watermelon.png",
+    origin: [0.5, 0.5],
+  },
+];
+
+export async function createFruit(
+  def: (typeof fruits)[number],
+  context: Context,
+) {
+  const texture = BaseTexture.from(def.img);
+
+  const sprite = Sprite.from(texture);
+  sprite.anchor.set(def.origin[0], def.origin[1]);
+  return new Promise<{
+    sprite: Sprite;
+    rigidBody: RigidBody;
+  }>((resolve) => {
+    texture.on("loaded", () => {
+      const rigidBodyDesc =
+        context.RAPIER.RigidBodyDesc.dynamic().setTranslation(0.0, 0.0);
+      const rigidBody = context.world.createRigidBody(rigidBodyDesc);
+
+      const colliderDesc = context.RAPIER.ColliderDesc.ball(texture.width / 2);
+      const collider = context.world
+        .createCollider(colliderDesc, rigidBody)
+        .setTranslation({
+          x: def.origin[0] * texture.width,
+          y: def.origin[1] * texture.height,
+        });
+
+      rigidBody.addForce(new context.RAPIER.Vector2(2, 0.0), true);
+      context.app.stage.addChild(sprite);
+
+      resolve({ sprite, rigidBody });
+    });
+  });
+}
