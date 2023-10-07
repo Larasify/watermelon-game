@@ -10,6 +10,7 @@ const app = new Application({
 });
 
 app.stage.scale.set(2);
+app.stage.eventMode = "static";
 app.stage.sortableChildren = true;
 
 const debugRender = new DebugRender();
@@ -42,6 +43,7 @@ export type Context = {
 
 import("@dimforge/rapier2d").then(async (RAPIER) => {
   const world = createWorld(RAPIER);
+  const eventQueue = new RAPIER.EventQueue(true);
 
   const context = {
     RAPIER,
@@ -49,18 +51,32 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
     app,
   };
 
+  const DROP_Y = 50;
+
   const objects = await Promise.all(
     fruits.map((fruit) => createFruit(fruit, context)),
   );
 
+  const objectMap = new Map();
+
   let i = 0;
-  for(const object of objects){
-    object.rigidBody.setTranslation({x: i+300, y: 200}, true);
+  for (const object of objects) {
+    object.rigidBody.collider(0);
+    object.rigidBody.setTranslation({ x: i + 300, y: 200 }, true);
     i += object.sprite.width;
-  };
+    objectMap.set(object.rigidBody.collider(0).handle, object);
+  }
 
   app.ticker.add((delta) => {
-    world.step();
+    const x = app.renderer.events.pointer.x;
+    //console.log(x);
+    world.step(eventQueue);
+    eventQueue.drainCollisionEvents((handle1, handle2, started) => {
+      if(!started) return;
+      const object1 = objectMap.get(handle1);
+      const object2 = objectMap.get(handle2);
+      console.log("collision", object1.name, object2.name, started);
+    });
 
     for (const { sprite, rigidBody } of objects) {
       const position = rigidBody.translation();

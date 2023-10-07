@@ -36,7 +36,7 @@ export const fruits = [
   {
     name: "Yuzu",
     img: "yuzu.png",
-    origin: [0.5, 219/416],
+    origin: [0.5, 219 / 416],
   },
   {
     name: "Peach",
@@ -73,24 +73,26 @@ export async function createFruit(
   return new Promise<{
     sprite: Sprite;
     rigidBody: RigidBody;
+    name: String;
   }>((resolve) => {
     texture.on("loaded", () => {
       const rigidBodyDesc =
         context.RAPIER.RigidBodyDesc.dynamic().setTranslation(0.0, 0.0);
       const rigidBody = context.world.createRigidBody(rigidBodyDesc);
 
-      const colliderDesc = context.RAPIER.ColliderDesc.ball(texture.width / 2 * SCALE);
-      const collider = context.world
-        .createCollider(colliderDesc, rigidBody)
-        .setTranslation({
-          x: def.origin[0] * texture.width,
-          y: def.origin[1] * texture.height,
-        });
-
+      const colliderDesc = context.RAPIER.ColliderDesc.ball(
+        (texture.width / 2) * SCALE,
+      );
+      const collider = context.world.createCollider(colliderDesc, rigidBody);
+      collider.setTranslation({
+        x: def.origin[0] * texture.width,
+        y: def.origin[1] * texture.height,
+      });
+      collider.setActiveEvents(context.RAPIER.ActiveEvents.COLLISION_EVENTS);
       rigidBody.addForce(new context.RAPIER.Vector2(2, 0.0), true);
       context.app.stage.addChild(sprite);
 
-      resolve({ sprite, rigidBody });
+      resolve({ sprite, rigidBody, name:def.name });
     });
   });
 }
