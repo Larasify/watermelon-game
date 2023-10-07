@@ -1,7 +1,7 @@
 import type { DebugRenderBuffers } from "@dimforge/rapier2d";
 import { Application, Graphics, Sprite } from "pixi.js";
 import { DebugRender } from "./debug";
-import { createFruit, fruits } from "./fruits";
+import { createFruit, fruits, type Fruit } from "./fruits";
 
 const app = new Application({
   background: "#1099bb",
@@ -53,28 +53,44 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
 
   const DROP_Y = 50;
 
-  const objects = await Promise.all(
-    fruits.map((fruit) => createFruit(fruit, context)),
-  );
+  const objects: Fruit[] = [];
 
   const objectMap = new Map();
 
-  let i = 0;
-  for (const object of objects) {
-    object.rigidBody.collider(0);
-    object.rigidBody.setTranslation({ x: i + 300, y: 200 }, true);
-    i += object.sprite.width;
-    objectMap.set(object.rigidBody.collider(0).handle, object);
-  }
+
+  app.view.addEventListener!("pointerup", () =>{
+    const newFruit = createFruit(fruits[Math.floor(Math.random() * 0)], context);
+    newFruit.rigidBody.setTranslation({ x: app.renderer.events.pointer.x, y: DROP_Y }, true);
+    objectMap.set(newFruit.rigidBody.collider(0).handle, newFruit);
+    objects.push(newFruit);
+  });
 
   app.ticker.add((delta) => {
-    const x = app.renderer.events.pointer.x;
+    //const x = app.renderer.events.pointer.x;
     //console.log(x);
     world.step(eventQueue);
-    eventQueue.drainCollisionEvents((handle1, handle2, started) => {
+    eventQueue.drainCollisionEvents( async (handle1, handle2, started) => {
       if(!started) return;
       const object1 = objectMap.get(handle1);
       const object2 = objectMap.get(handle2);
+      if (!object1 || !object2 || object1.index !== object2.index) return;
+      const midpointX = (object1.sprite.x + object2.sprite.x) / 2;
+      const midpointY = (object1.sprite.y + object2.sprite.y) / 2;
+      const nextFruit = fruits[object1.index + 1];
+      if (!nextFruit) return;
+      object1.remove();
+      object2.remove();
+      objects.splice(objects.indexOf(object1), 1);
+      objects.splice(objects.indexOf(object2), 1);
+      objectMap.delete(handle1);
+      objectMap.delete(handle2);
+
+      const newFruit = createFruit(nextFruit, context);
+      newFruit.rigidBody.setTranslation({ x: midpointX, y: midpointY }, true);
+      objectMap.set(newFruit.rigidBody.collider(0).handle, newFruit);
+      objects.push(newFruit);
+
+
       console.log("collision", object1.name, object2.name, started);
     });
 
