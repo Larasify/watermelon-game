@@ -16,10 +16,10 @@ app.stage.sortableChildren = true;
 const debugRender = new DebugRender();
 app.stage.addChild(debugRender);
 
+const offset = { x: 100, y: 50 };
+
 function createWorld(RAPIER: typeof import("@dimforge/rapier2d")) {
   let world = new RAPIER.World({ x: 0.0, y: 98.1 * 2 });
-
-  const offset = { x: 100, y: 50 };
 
   let ground = RAPIER.ColliderDesc.cuboid(313 / 2, 10);
   ground.setTranslation(offset.x + 313 / 2, 351 + 10 + offset.y);
@@ -57,10 +57,15 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
 
   const objectMap = new Map();
 
-
-  app.view.addEventListener!("pointerup", () =>{
-    const newFruit = createFruit(fruits[Math.floor(Math.random() * 0)], context);
-    newFruit.rigidBody.setTranslation({ x: app.renderer.events.pointer.x, y: DROP_Y }, true);
+  app.view.addEventListener!("pointerup", () => {
+    const newFruit = createFruit(
+      fruits[Math.floor(Math.random() * 0)],
+      context,
+    );
+    newFruit.rigidBody.setTranslation(
+      { x: app.renderer.events.pointer.x, y: DROP_Y },
+      true,
+    );
     objectMap.set(newFruit.rigidBody.collider(0).handle, newFruit);
     objects.push(newFruit);
   });
@@ -69,8 +74,8 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
     //const x = app.renderer.events.pointer.x;
     //console.log(x);
     world.step(eventQueue);
-    eventQueue.drainCollisionEvents( async (handle1, handle2, started) => {
-      if(!started) return;
+    eventQueue.drainCollisionEvents(async (handle1, handle2, started) => {
+      if (!started) return;
       const object1 = objectMap.get(handle1);
       const object2 = objectMap.get(handle2);
       if (!object1 || !object2 || object1.index !== object2.index) return;
@@ -89,7 +94,6 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
       newFruit.rigidBody.setTranslation({ x: midpointX, y: midpointY }, true);
       objectMap.set(newFruit.rigidBody.collider(0).handle, newFruit);
       objects.push(newFruit);
-
 
       console.log("collision", object1.name, object2.name, started);
     });
