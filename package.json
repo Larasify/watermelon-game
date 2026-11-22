@@ -21,5 +21,8 @@
     "prettier-plugin-astro": "^0.12.0",
     "prettier-plugin-tailwindcss": "^0.5.5",
     "vite-plugin-wasm": "^3.2.2"
+  },
+  "volta": {
+    "node": "27.0.0-alpha.0.1.1"
   }
 }

@@ -368,7 +368,7 @@ function drawGuide(x: number, radius: number, visible: boolean) {
 // Physics
 // ---------------------------------------------------------------------------
 function createWorld(RAPIER: typeof import("@dimforge/rapier2d")) {
-  let world = new RAPIER.World({ x: 0.0, y: 98.1 * 2 });
+  let world = new RAPIER.World({ x: 0.0, y: 98.1 * 3 });
 
   let ground = RAPIER.ColliderDesc.cuboid(313 / 2, 10);
   ground.setTranslation(offset.x + 313 / 2, 351 + 10 + offset.y);
