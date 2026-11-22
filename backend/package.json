@@ -10,5 +10,8 @@
   "license": "ISC",
   "devDependencies": {
     "tsx": "^3.13.0"
+  },
+  "volta": {
+    "node": "27.0.0-alpha.0.1.1"
   }
 }
