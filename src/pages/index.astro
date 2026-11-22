@@ -1,17 +1,193 @@
 ---
-
+const chain = [
+  "cherry",
+  "strawberry",
+  "grape",
+  "orange",
+  "persimmon",
+  "apple",
+  "yuzu",
+  "peach",
+  "pineapple",
+  "honeydew",
+  "watermelon",
+];
 ---
 
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="generator" content={Astro.generator} />
-    <title>Astro</title>
+    <meta name="theme-color" content="#ffe3d3" />
+    <title>Watermelon Game 🍉</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
-  <body>
-    <canvas id="game-canvas" class="w-screen h-screen"></canvas>
+  <body class="flex h-[100dvh] flex-col items-center overflow-hidden text-[#6b3a2e]">
+    <div class="bg-blob left-[-8rem] top-[-6rem] bg-[#ffb4c6]"></div>
+    <div class="bg-blob bottom-[-8rem] right-[-6rem] bg-[#bfeaa4]"></div>
+    <div class="bg-blob right-[20%] top-[30%] h-64 w-64 bg-[#ffe08a]"></div>
+
+    <header
+      class="relative z-10 flex w-full max-w-xl items-center justify-between gap-3 px-4 pt-4 sm:pt-6"
+    >
+      <h1 class="title text-3xl leading-none sm:text-5xl">
+        Watermelon<br /><span class="text-[#3f9d4a]">Game</span>
+      </h1>
+
+      <div class="flex gap-2 sm:gap-3">
+        <div class="card min-w-[5.5rem] text-center sm:min-w-[7rem]">
+          <div class="label">Score</div>
+          <div id="score" class="text-2xl font-bold tabular-nums sm:text-3xl">0</div>
+          <div class="text-xs opacity-70">best <span id="best" class="tabular-nums">0</span></div>
+        </div>
+        <div class="card flex flex-col items-center justify-center">
+          <div class="label">Next</div>
+          <div class="grid h-10 w-10 place-items-center sm:h-12 sm:w-12">
+            <img id="next-fruit" src="/cherry.png" alt="" class="next-img max-h-full max-w-full" />
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main id="game-wrap" class="relative z-10 min-h-0 w-full flex-1">
+      <canvas id="game-canvas" class="absolute inset-0 touch-none"></canvas>
+    </main>
+
+    <footer class="relative z-10 w-full max-w-xl px-4 pb-4">
+      <div class="card flex items-center justify-between gap-0.5 !px-3 !py-2">
+        {
+          chain.map((name, i) => (
+            <>
+              <img
+                src={`/${name}.png`}
+                alt={name}
+                title={name}
+                class="chain-img"
+                style={`height:${0.9 + i * 0.13}rem`}
+              />
+              {i < chain.length - 1 && <span class="text-[0.6rem] opacity-40">›</span>}
+            </>
+          ))
+        }
+      </div>
+    </footer>
   </body>
   <script src="../game.ts"></script>
 </html>
+
+<style is:global>
+  html,
+  body {
+    font-family: "Fredoka", ui-rounded, system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  body {
+    background-color: #ffe9dc;
+    background-image:
+      radial-gradient(rgba(255, 255, 255, 0.7) 2px, transparent 2.5px),
+      radial-gradient(rgba(255, 255, 255, 0.45) 2px, transparent 2.5px),
+      linear-gradient(160deg, #fff4e6 0%, #ffe3d3 45%, #ffd6e0 100%);
+    background-size:
+      28px 28px,
+      28px 28px,
+      100% 100%;
+    background-position:
+      0 0,
+      14px 14px,
+      0 0;
+  }
+
+  .bg-blob {
+    position: fixed;
+    width: 22rem;
+    height: 22rem;
+    border-radius: 9999px;
+    filter: blur(70px);
+    opacity: 0.55;
+    pointer-events: none;
+    animation: float 14s ease-in-out infinite alternate;
+  }
+
+  @keyframes float {
+    to {
+      transform: translate(2rem, 1.5rem) scale(1.08);
+    }
+  }
+
+  .title {
+    font-weight: 700;
+    color: #e2466b;
+    letter-spacing: -0.01em;
+    text-shadow:
+      0 3px 0 #fff,
+      0 6px 14px rgba(226, 70, 107, 0.25);
+    transform: rotate(-2deg);
+  }
+
+  .card {
+    border-radius: 1.25rem;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow:
+      0 8px 24px -8px rgba(140, 70, 50, 0.25),
+      inset 0 -3px 0 rgba(201, 139, 94, 0.15);
+    padding: 0.4rem 0.9rem;
+  }
+
+  .label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #c98b5e;
+  }
+
+  .next-img {
+    filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.15));
+    animation: bob 1.6s ease-in-out infinite;
+  }
+  .next-img.pop {
+    animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .chain-img {
+    width: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.12));
+    transition: transform 0.2s;
+  }
+  .chain-img:hover {
+    transform: translateY(-3px) scale(1.15);
+  }
+
+  .bump {
+    animation: bump 0.3s ease-out;
+  }
+
+  @keyframes bob {
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+  @keyframes pop {
+    from {
+      transform: scale(0.3);
+    }
+  }
+  @keyframes bump {
+    40% {
+      transform: scale(1.25);
+      color: #e2466b;
+    }
+  }
+</style>

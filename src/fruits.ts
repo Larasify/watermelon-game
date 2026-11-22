@@ -63,7 +63,7 @@ export const fruits = [
   index,
   texture: BaseTexture.from(fruit.img),
 }));
-const SCALE = 0.2;
+export const SCALE = 0.2;
 
 export type Fruit = {
   sprite: Sprite;
@@ -94,7 +94,7 @@ export function createFruit(def: (typeof fruits)[number], context: Context) {
   });
   collider.setActiveEvents(context.RAPIER.ActiveEvents.COLLISION_EVENTS);
   rigidBody.addForce(new context.RAPIER.Vector2(2, 0.0), true);
-  context.app.stage.addChild(sprite);
+  context.layer.addChild(sprite);
 
   return {
     sprite,
@@ -103,7 +103,7 @@ export function createFruit(def: (typeof fruits)[number], context: Context) {
     index: fruits.indexOf(def),
     remove: () => {
       context.world.removeRigidBody(rigidBody);
-      context.app.stage.removeChild(sprite);
+      context.layer.removeChild(sprite);
     },
   };
 }
