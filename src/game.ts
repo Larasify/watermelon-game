@@ -1,6 +1,19 @@
 import { Application, Container, Graphics, LINE_CAP, Sprite, Text, Texture } from "pixi.js";
 import { DebugRender } from "./debug";
 import { createFruit, fruits, SCALE, type Fruit } from "./fruits";
+import type { Collider } from "@dimforge/rapier2d";
+import {
+  getVolume,
+  isMuted,
+  playDrop,
+  playGameOver,
+  playLand,
+  playMerge,
+  playStart,
+  setMuted,
+  setVolume,
+  unlockAudio,
+} from "./sound";
 
 // ---------------------------------------------------------------------------
 // Layout (physics/world units)
@@ -15,6 +28,9 @@ const JAR = {
 const DROP_Y = offset.y - 30;
 const DROPPABLE = 5; // only the smallest N fruits can be dropped
 const DROP_COOLDOWN = 450; // ms
+// If any settled fruit pokes above this line for OVERFLOW_TIME, it's game over.
+const DANGER_Y = JAR.top + 18;
+const OVERFLOW_TIME = 120; // ticker frames (~2s at 60fps)
 
 // Visible region of the world that we fit to the screen.
 const VIEW = {
@@ -66,20 +82,23 @@ const guide = new Graphics();
 const fruitLayer = new Container();
 const fxLayer = new Container();
 const jarFront = new Graphics();
+const danger = new Graphics();
 const debugRender = new DebugRender();
 debugRender.visible = false;
 jarBack.zIndex = 0;
 guide.zIndex = 1;
 fruitLayer.zIndex = 2;
 jarFront.zIndex = 3;
+danger.zIndex = 3.5;
 fxLayer.zIndex = 4;
-board.addChild(jarBack, guide, fruitLayer, jarFront, fxLayer, debugRender);
+board.addChild(jarBack, guide, fruitLayer, jarFront, danger, fxLayer, debugRender);
 
 const preview = new Sprite(textures[0]);
 preview.zIndex = 5;
 board.addChild(preview);
 
 drawJar();
+drawDanger();
 
 let shake = 0;
 function layout() {
@@ -155,6 +174,15 @@ function drawJar() {
   f.endFill();
 }
 
+function drawDanger() {
+  danger.lineStyle({ width: 2.5, color: 0xe2466b, alpha: 1, cap: LINE_CAP.ROUND });
+  for (let x = JAR.left + 6; x < JAR.right - 6; x += 14) {
+    danger.moveTo(x, DANGER_Y);
+    danger.lineTo(Math.min(x + 7, JAR.right - 6), DANGER_Y);
+  }
+  danger.alpha = 0.3;
+}
+
 // ---------------------------------------------------------------------------
 // HUD
 // ---------------------------------------------------------------------------
@@ -169,6 +197,13 @@ function restart(el: HTMLElement, cls: string) {
   el.classList.remove(cls);
   void el.offsetWidth;
   el.classList.add(cls);
+}
+
+let bestAtStart = best;
+function resetScore() {
+  score = 0;
+  bestAtStart = best;
+  scoreEl.textContent = "0";
 }
 
 function addScore(points: number) {
@@ -196,7 +231,10 @@ type Particle = {
   grow: number;
 };
 const particles: Particle[] = [];
-const pops: { sprite: Sprite; t: number }[] = [];
+// Grow-in animations. If a collider is attached, its physics radius grows too,
+// so a freshly merged fruit gently pushes neighbours aside instead of shoving them.
+const POP_START = 0.4;
+const pops: { sprite: Sprite; t: number; collider?: Collider; radius?: number }[] = [];
 
 function burst(x: number, y: number, index: number) {
   const color = FRUIT_COLORS[index] ?? 0xffffff;
@@ -260,10 +298,14 @@ function burst(x: number, y: number, index: number) {
   addScore(points);
 }
 
-function popIn(sprite: Sprite) {
-  sprite.scale.set(SCALE * 0.4);
-  pops.push({ sprite, t: 0 });
+function popIn(sprite: Sprite, collider?: Collider) {
+  sprite.scale.set(SCALE * POP_START);
+  const radius = collider?.radius();
+  if (collider && radius) collider.setRadius(radius * POP_START);
+  pops.push({ sprite, t: 0, collider, radius });
 }
+
+const smoothstep = (t: number) => t * t * (3 - 2 * t);
 
 function easeOutBack(t: number) {
   const c1 = 2.2;
@@ -289,11 +331,16 @@ function updateFx(delta: number) {
   for (let i = pops.length - 1; i >= 0; i--) {
     const pop = pops[i];
     pop.t = Math.min(1, pop.t + delta / 14);
-    if (pop.sprite.destroyed) {
+    // removed from the stage = fruit was merged away mid-animation (its collider is freed)
+    if (pop.sprite.destroyed || !pop.sprite.parent) {
       pops.splice(i, 1);
       continue;
     }
-    pop.sprite.scale.set(SCALE * (0.4 + 0.6 * easeOutBack(pop.t)));
+    pop.sprite.scale.set(SCALE * (POP_START + (1 - POP_START) * easeOutBack(pop.t)));
+    if (pop.collider && pop.radius) {
+      // no overshoot for physics: a smooth 40% -> 100% ramp
+      pop.collider.setRadius(pop.radius * (POP_START + (1 - POP_START) * smoothstep(pop.t)));
+    }
     if (pop.t >= 1) pops.splice(i, 1);
   }
   if (shake > 0) {
@@ -352,10 +399,57 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
 
   const objects: Fruit[] = [];
   const objectMap = new Map();
+  const landed = new Set<Fruit>(); // fruits that already played their landing plop
 
   let nextIndex = Math.floor(Math.random() * DROPPABLE);
   let aimX = (JAR.left + JAR.right) / 2;
   let ready = true;
+  let gameOver = false;
+  let overflow = 0; // frames something has been above the danger line
+  let round = 0; // bumps on restart so stale drop-cooldown timers are ignored
+
+  const overlay = document.getElementById("game-over")!;
+  const finalScoreEl = document.getElementById("final-score")!;
+  const finalBestEl = document.getElementById("final-best")!;
+  const newBestEl = document.getElementById("new-best")!;
+  const playAgainBtn = document.getElementById("play-again")!;
+
+  function endGame() {
+    gameOver = true;
+    ready = false;
+    preview.visible = false;
+    shake = 8;
+    playGameOver();
+    for (const { sprite } of objects) sprite.tint = 0xc8c0bc; // wilt the fruit
+
+    finalScoreEl.textContent = String(score);
+    finalBestEl.textContent = String(best);
+    newBestEl.classList.toggle("hidden", !(score > bestAtStart && score > 0));
+    // let the shake/sound land before the card drops in
+    setTimeout(() => {
+      overlay.classList.add("show");
+      playAgainBtn.focus();
+    }, 700);
+  }
+
+  function newGame() {
+    for (const fruit of objects) fruit.remove();
+    objects.length = 0;
+    objectMap.clear();
+    landed.clear();
+    overflow = 0;
+    gameOver = false;
+    round++;
+    resetScore();
+    overlay.classList.remove("show");
+    nextIndex = Math.floor(Math.random() * DROPPABLE);
+    ready = true;
+    showNext();
+    unlockAudio();
+    playStart();
+  }
+
+  playAgainBtn.addEventListener("click", newGame);
 
   function showNext() {
     preview.texture = textures[nextIndex];
@@ -379,7 +473,9 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
   });
 
   app.stage.on("pointerup", (e) => {
-    if (!ready) return;
+    unlockAudio();
+    if (!ready || gameOver) return;
+    playDrop();
     aimX = board.toLocal(e.global).x;
     const index = nextIndex;
     const newFruit = createFruit(fruits[index], context);
@@ -392,7 +488,9 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
     nextIndex = Math.floor(Math.random() * DROPPABLE);
     nextEl.src = `/${fruits[nextIndex].img}`;
     restart(nextEl, "pop");
+    const thisRound = round;
     setTimeout(() => {
+      if (thisRound !== round || gameOver) return;
       ready = true;
       showNext();
     }, DROP_COOLDOWN);
@@ -400,14 +498,77 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "d") debugRender.visible = !debugRender.visible;
+    if (e.key === "m") toggleMute();
+    if (e.key === "Escape") toggleSoundPanel(false);
+    if (e.key === "Enter" && gameOver && overlay.classList.contains("show")) {
+      e.preventDefault();
+      newGame();
+    }
   });
 
+  // --- sound panel -------------------------------------------------------
+  const soundBtn = document.getElementById("sound-btn")!;
+  const soundPanel = document.getElementById("sound-panel")!;
+  const muteBtn = document.getElementById("mute")!;
+  const volumeInput = document.getElementById("volume") as HTMLInputElement;
+  const volumeValue = document.getElementById("volume-value")!;
+
+  function updateSoundUI() {
+    const v = Math.round(getVolume() * 100);
+    const icon = isMuted() ? "🔇" : v < 40 ? "🔉" : "🔊";
+    soundBtn.textContent = icon;
+    muteBtn.textContent = icon;
+    volumeInput.value = String(v);
+    volumeInput.style.setProperty("--fill", `${v}%`);
+    volumeInput.style.opacity = isMuted() ? "0.4" : "1";
+    volumeValue.textContent = String(v);
+  }
+
+  function toggleMute() {
+    unlockAudio();
+    setMuted(!isMuted());
+    updateSoundUI();
+  }
+
+  function toggleSoundPanel(open = soundPanel.classList.contains("hidden")) {
+    soundPanel.classList.toggle("hidden", !open);
+    soundBtn.setAttribute("aria-expanded", String(open));
+  }
+
+  soundBtn.addEventListener("click", () => {
+    unlockAudio();
+    toggleSoundPanel();
+  });
+  muteBtn.addEventListener("click", toggleMute);
+  volumeInput.addEventListener("input", () => {
+    unlockAudio();
+    setVolume(Number(volumeInput.value) / 100);
+    updateSoundUI();
+  });
+  // a little preview blip when you let go of the slider
+  volumeInput.addEventListener("change", () => playMerge(2));
+  // click anywhere else closes the panel
+  document.addEventListener("pointerdown", (e) => {
+    if (!soundPanel.parentElement!.contains(e.target as Node)) toggleSoundPanel(false);
+  });
+  updateSoundUI();
+
   app.ticker.add((delta) => {
-    world.step(eventQueue);
+    // physics freezes on game over (effects keep animating)
+    if (!gameOver) world.step(eventQueue);
     eventQueue.drainCollisionEvents(async (handle1, handle2, started) => {
       if (!started) return;
       const object1 = objectMap.get(handle1);
       const object2 = objectMap.get(handle2);
+
+      // first contact of a dropped fruit -> plop, louder the faster it was moving
+      for (const obj of [object1, object2] as (Fruit | undefined)[]) {
+        if (!obj || landed.has(obj)) continue;
+        landed.add(obj);
+        const v = obj.rigidBody.linvel();
+        playLand(obj.index, Math.hypot(v.x, v.y) / 300);
+      }
+
       if (!object1 || !object2 || object1.index !== object2.index) return;
 
       const midpointX = (object1.rigidBody.translation().x + object2.rigidBody.translation().x) / 2;
@@ -421,6 +582,8 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
       objects.splice(objects.indexOf(object2), 1);
       objectMap.delete(handle1);
       objectMap.delete(handle2);
+      landed.delete(object1);
+      landed.delete(object2);
 
       const newFruit = createFruit(nextFruit, context);
       newFruit.rigidBody.setTranslation({ x: midpointX, y: midpointY }, true);
@@ -428,8 +591,10 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
       objects.push(newFruit);
 
       newFruit.sprite.position.set(midpointX, midpointY);
-      popIn(newFruit.sprite);
+      landed.add(newFruit); // merged fruit doesn't need a landing plop
+      popIn(newFruit.sprite, newFruit.rigidBody.collider(0));
       burst(midpointX, midpointY, nextFruit.index);
+      playMerge(nextFruit.index);
     });
 
     for (const { sprite, rigidBody } of objects) {
@@ -439,11 +604,31 @@ import("@dimforge/rapier2d").then(async (RAPIER) => {
       sprite.rotation = rigidBody.rotation();
     }
 
+    // overflow check: only fruit that has landed counts (not ones mid-drop)
+    if (!gameOver) {
+      let over = false;
+      for (const fruit of landed) {
+        if (fruit.rigidBody.translation().y - radiusOf(fruit.index) < DANGER_Y) {
+          over = true;
+          break;
+        }
+      }
+      overflow = over ? overflow + delta : Math.max(0, overflow - delta * 2);
+      if (overflow >= OVERFLOW_TIME) endGame();
+    }
+    // danger line: faint normally, pulses faster as the timer runs out
+    if (overflow > 0 && !gameOver) {
+      const urgency = overflow / OVERFLOW_TIME;
+      danger.alpha = 0.55 + 0.45 * Math.sin(performance.now() / (180 - urgency * 120));
+    } else {
+      danger.alpha += ((gameOver ? 0.9 : 0.3) - danger.alpha) * 0.1;
+    }
+
     // aim preview + guide
     const x = clampAim(aimX, nextIndex);
     preview.x += (x - preview.x) * Math.min(1, 0.35 * delta);
     preview.y = DROP_Y + Math.sin(performance.now() / 260) * 1.5;
-    drawGuide(preview.x, radiusOf(nextIndex), ready);
+    drawGuide(preview.x, radiusOf(nextIndex), ready && !gameOver);
 
     updateFx(delta);
     layout();
